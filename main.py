@@ -133,7 +133,13 @@ async def test_chat(message: str):
             temperature=0.7
         )
         reply = response.choices[0].message.content
-        return {"message": message, "response": reply}
+        return {
+            "reply": reply,
+            "response": reply,
+            "text": reply,
+            "output": reply,
+            "message": reply
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -160,15 +166,18 @@ async def test_chat_post(request: Request):
 
     # Try to extract the message using common keys
     message = None
-    common_keys = ["message", "text", "prompt", "query", "question", "content", "msg"]
+    common_keys = ["chatinput", "message", "text", "prompt", "query", "question", "content", "msg"]
     for key in common_keys:
         if key in data and isinstance(data[key], str) and data[key].strip():
             message = data[key]
             break
 
-    # Fallback: If there's only one string field in the payload, use that
+    # Fallback: If there's only one string field in the payload (ignoring metadata/system fields), use that
     if not message:
+        ignored_keys = {"visitorid", "visitor_id", "id", "sender", "role", "conversationid", "conversation_id"}
         for k, v in data.items():
+            if k.lower() in ignored_keys:
+                continue
             if isinstance(v, str) and v.strip():
                 message = v
                 break
@@ -193,7 +202,13 @@ async def test_chat_post(request: Request):
             temperature=0.7
         )
         reply = response.choices[0].message.content
-        return {"message": message, "response": reply}
+        return {
+            "reply": reply,
+            "response": reply,
+            "text": reply,
+            "output": reply,
+            "message": reply
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
