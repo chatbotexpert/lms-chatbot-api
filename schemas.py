@@ -20,3 +20,10 @@ class IngestResponse(BaseModel):
     success: bool
     message: str
     chunks_created: int
+
+class SimpleChatPayload(BaseModel):
+    message: str = Field(..., description="The user's test message")
+
+class SimpleChatResponse(BaseModel):
+    response: str
+
