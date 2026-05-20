@@ -13,7 +13,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from database import engine, Base, get_db
 from models import LessonChunk
-from schemas import IngestPayload, ChatPayload, IngestResponse
+from schemas import IngestPayload, ChatPayload, IngestResponse, SimpleChatPayload
 from services import (
     get_embedding,
     get_embeddings_batch,
@@ -121,7 +121,7 @@ async def root():
 @app.get("/api/test-chat")
 async def test_chat(message: str):
     """
-    Test endpoint that directly forwards a message to OpenAI and returns the response.
+    Test endpoint that directly forwards a message to OpenAI and returns the response (via GET).
     """
     from services import openai_client
     try:
@@ -134,6 +134,29 @@ async def test_chat(message: str):
         )
         reply = response.choices[0].message.content
         return {"message": message, "response": reply}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OpenAI API error: {str(e)}"
+        )
+
+
+@app.post("/api/test-chat")
+async def test_chat_post(payload: SimpleChatPayload):
+    """
+    Test endpoint that directly forwards a message to OpenAI and returns the response (via POST).
+    """
+    from services import openai_client
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "user", "content": payload.message}
+            ],
+            temperature=0.7
+        )
+        reply = response.choices[0].message.content
+        return {"message": payload.message, "response": reply}
     except Exception as e:
         raise HTTPException(
             status_code=500,
