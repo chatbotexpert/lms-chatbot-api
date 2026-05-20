@@ -161,12 +161,6 @@ async def test_chat_post(request: Request):
             detail=f"Invalid JSON payload: {str(e)}"
         )
 
-    # Safely print payload (Vercel captures stdout logs in dashboard)
-    try:
-        print("Incoming Webhook Payload:", data)
-    except Exception:
-        pass
-
     # Try to extract the message using common keys
     message = None
     common_keys = ["chatinput", "message", "text", "prompt", "query", "question", "content", "msg"]
