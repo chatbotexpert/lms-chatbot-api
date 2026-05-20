@@ -133,7 +133,13 @@ async def test_chat(message: str):
             temperature=0.7
         )
         reply = response.choices[0].message.content
-        return {"message": message, "response": reply}
+        return {
+            "reply": reply,
+            "response": reply,
+            "text": reply,
+            "output": reply,
+            "message": reply
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -149,26 +155,32 @@ async def test_chat_post(request: Request):
     """
     try:
         data = await request.json()
-        import json
-        with open("debug_payload.json", "w") as f:
-            json.dump(data, f, indent=2)
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid JSON payload or log write failure: {str(e)}"
+            detail=f"Invalid JSON payload: {str(e)}"
         )
+
+    # Safely print payload (Vercel captures stdout logs in dashboard)
+    try:
+        print("Incoming Webhook Payload:", data)
+    except Exception:
+        pass
 
     # Try to extract the message using common keys
     message = None
-    common_keys = ["message", "text", "prompt", "query", "question", "content", "msg"]
+    common_keys = ["chatinput", "message", "text", "prompt", "query", "question", "content", "msg"]
     for key in common_keys:
         if key in data and isinstance(data[key], str) and data[key].strip():
             message = data[key]
             break
 
-    # Fallback: If there's only one string field in the payload, use that
+    # Fallback: If there's only one string field in the payload (ignoring metadata/system fields), use that
     if not message:
+        ignored_keys = {"visitorid", "visitor_id", "id", "sender", "role", "conversationid", "conversation_id"}
         for k, v in data.items():
+            if k.lower() in ignored_keys:
+                continue
             if isinstance(v, str) and v.strip():
                 message = v
                 break
@@ -193,7 +205,13 @@ async def test_chat_post(request: Request):
             temperature=0.7
         )
         reply = response.choices[0].message.content
-        return {"message": message, "response": reply}
+        return {
+            "reply": reply,
+            "response": reply,
+            "text": reply,
+            "output": reply,
+            "message": reply
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500,
