@@ -3,7 +3,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Security, status
+from fastapi import FastAPI, Depends, HTTPException, Security, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
@@ -142,21 +142,55 @@ async def test_chat(message: str):
 
 
 @app.post("/api/test-chat")
-async def test_chat_post(payload: SimpleChatPayload):
+async def test_chat_post(request: Request):
     """
     Test endpoint that directly forwards a message to OpenAI and returns the response (via POST).
+    It dynamically extracts the message key to accommodate different client schemas.
     """
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid JSON payload. Please send a valid JSON request."
+        )
+
+    # Try to extract the message using common keys
+    message = None
+    common_keys = ["message", "text", "prompt", "query", "question", "content", "msg"]
+    for key in common_keys:
+        if key in data and isinstance(data[key], str) and data[key].strip():
+            message = data[key]
+            break
+
+    # Fallback: If there's only one string field in the payload, use that
+    if not message:
+        for k, v in data.items():
+            if isinstance(v, str) and v.strip():
+                message = v
+                break
+
+    if not message:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Could not extract a message from the request body. "
+                f"We checked keys: {common_keys}. "
+                f"Received payload keys: {list(data.keys())}"
+            )
+        )
+
     from services import openai_client
     try:
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "user", "content": payload.message}
+                {"role": "user", "content": message}
             ],
             temperature=0.7
         )
         reply = response.choices[0].message.content
-        return {"message": payload.message, "response": reply}
+        return {"message": message, "response": reply}
     except Exception as e:
         raise HTTPException(
             status_code=500,
