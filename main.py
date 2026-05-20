@@ -149,10 +149,13 @@ async def test_chat_post(request: Request):
     """
     try:
         data = await request.json()
-    except Exception:
+        import json
+        with open("debug_payload.json", "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail="Invalid JSON payload. Please send a valid JSON request."
+            detail=f"Invalid JSON payload or log write failure: {str(e)}"
         )
 
     # Try to extract the message using common keys
