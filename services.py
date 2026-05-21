@@ -66,9 +66,11 @@ async def analyze_image_with_vision(image_url: str, semaphore: asyncio.Semaphore
                 temperature=0.0
             )
             description = response.choices[0].message.content
-            return f"Image ({image_url}) description: {description}"
+            display_url = image_url[:100] + "..." if len(image_url) > 100 else image_url
+            return f"Image ({display_url}) description: {description}"
         except Exception as e:
-            print(f"Error describing image {image_url}: {e}")
+            display_url = image_url[:100] + "..." if len(image_url) > 100 else image_url
+            print(f"Error describing image {display_url}: {e}")
             return None
 
 async def analyze_images_concurrently(image_urls: List[str]) -> List[str]:
