@@ -118,7 +118,7 @@ async def root():
         </body>
     </html>
     """
-@app.get("/api/test-chat")
+@app.post("/api/test-chat")
 async def test_chat(message: str):
     """
     Test endpoint that directly forwards a message to OpenAI and returns the response (via GET).
