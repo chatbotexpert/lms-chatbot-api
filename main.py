@@ -147,7 +147,7 @@ async def test_chat(message: str):
         )
 
 
-@app.post("/api/test-chat")
+@app.post("/api/chat")
 async def test_chat_post(request: Request):
     """
     Test endpoint that directly forwards a message to OpenAI and returns the response (via POST).
