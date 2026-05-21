@@ -119,16 +119,16 @@ async def root():
     </html>
     """
 @app.post("/api/test-chat")
-async def test_chat(message: str):
+async def test_chat(payload: SimpleChatPayload):
     """
-    Test endpoint that directly forwards a message to OpenAI and returns the response (via GET).
+    Test endpoint that directly forwards a message to OpenAI and returns the response (via POST).
     """
     from services import openai_client
     try:
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "user", "content": message}
+                {"role": "user", "content": payload.message}
             ],
             temperature=0.7
         )
