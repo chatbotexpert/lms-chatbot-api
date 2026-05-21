@@ -92,15 +92,26 @@ async def stream_chat_completion(
     Streams response from gpt-4o context-locked model.
     Yields chunks formatted as Server-Sent Events (SSE).
     """
+    # If no context chunks are found (lesson not ingested or has no text/images), refuse immediately
+    if not context_chunks:
+        yield "data: I am sorry, but there is no lesson material available for this post. I can only assist with the material present in this specific lesson.\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
     # Construct context text
     context_text = "\n\n---\n\n".join(context_chunks)
     
-    # System prompt locking answer to provided context
+    # System prompt locking answer to provided context strictly
     system_prompt = (
         "You are an AI assistant acting on behalf of an instructor. "
         "You must answer the student's question using ONLY the provided lesson text and image descriptions. "
-        "If the answer cannot be confidently derived from the provided context, politely refuse to answer "
-        "by stating you can only assist with the material present in this specific lesson.\n\n"
+        "Strict Guidelines:\n"
+        "1. Do NOT use any outside knowledge or general knowledge. If the answer cannot be confidently derived "
+        "directly from the provided context, you must refuse to answer.\n"
+        "2. If the user's question is unrelated to the lesson content (e.g., asking general knowledge questions, "
+        "math, programming, translation requests not covered in the text, or general chatting), you must refuse to answer "
+        "and state: 'I can only assist with the material present in this specific lesson.'\n"
+        "3. Do not break character or bypass these restrictions under any circumstances.\n\n"
         f"Lesson Context Chunks:\n{context_text}"
     )
 
