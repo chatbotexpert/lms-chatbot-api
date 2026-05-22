@@ -96,7 +96,8 @@ async def stream_chat_completion(
     """
     # If no context chunks are found (lesson not ingested or has no text/images), refuse immediately
     if not context_chunks:
-        yield "data: I am sorry, but there is no lesson material available for this post. I can only assist with the material present in this specific lesson.\n\n"
+        refusal = "I am sorry, but there is no lesson material available for this post. I can only assist with the material present in this specific lesson."
+        yield f"data: {json.dumps({'token': refusal})}\n\n"
         yield "data: [DONE]\n\n"
         return
 
@@ -139,15 +140,11 @@ async def stream_chat_completion(
         async for chunk in stream:
             token = chunk.choices[0].delta.content
             if token:
-                # Format as Server-Sent Event data
-                # We yield the raw text inside a SSE packet, or JSON.
-                # Standard web clients can consume raw text stream via SSE easily.
-                # Yielding both simple string and JSON format for flexibility:
-                # Here we yield the chunk directly.
-                yield f"data: {token}\n\n"
+                # Format as Server-Sent Event data containing JSON string
+                yield f"data: {json.dumps({'token': token})}\n\n"
                 
         yield "data: [DONE]\n\n"
     except Exception as e:
         error_msg = f"Error in LLM stream: {str(e)}"
-        yield f"data: Error: {error_msg}\n\n"
+        yield f"data: {json.dumps({'token': f'Error: {error_msg}'})}\n\n"
         yield "data: [DONE]\n\n"
