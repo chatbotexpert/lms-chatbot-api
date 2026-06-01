@@ -232,7 +232,8 @@ async def chat(
             detail=f"Failed to generate query embedding: {str(e)}"
         )
 
-        # 2. Strict Metadata Filtered pgvector Cosine Similarity Query (Text Chunks Only by default)
+    # 2. Strict Metadata Filtered pgvector Cosine Similarity Query (Text Chunks Only by default)
+    try:
         stmt = (
             select(LessonChunk)
             .where(
