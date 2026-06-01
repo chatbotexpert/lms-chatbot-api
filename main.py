@@ -232,13 +232,13 @@ async def chat(
             detail=f"Failed to generate query embedding: {str(e)}"
         )
 
-    # 2. Strict Metadata Filtered pgvector Cosine Similarity Query
-    try:
-        # cosine_distance ranges from 0 to 2, where 0 is identical.
-        # So we sort by distance ascending (top closest vector matches)
+        # 2. Strict Metadata Filtered pgvector Cosine Similarity Query (Text Chunks Only by default)
         stmt = (
             select(LessonChunk)
-            .where(LessonChunk.lesson_id == payload.lesson_id)
+            .where(
+                LessonChunk.lesson_id == payload.lesson_id,
+                LessonChunk.chunk_type == "text"
+            )
             .order_by(LessonChunk.embedding.cosine_distance(query_vector))
             .limit(5)
         )
