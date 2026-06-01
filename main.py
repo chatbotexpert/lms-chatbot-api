@@ -243,7 +243,25 @@ async def chat(
             .limit(5)
         )
         result = await db.execute(stmt)
-        matched_chunks = result.scalars().all()
+        matched_chunks = list(result.scalars().all())
+
+        # Ensure any visual context is included by always appending image description chunks
+        # if they are not already in the top 5 semantically matched chunks.
+        img_stmt = (
+            select(LessonChunk)
+            .where(
+                LessonChunk.lesson_id == payload.lesson_id,
+                LessonChunk.chunk_type == "image_description"
+            )
+        )
+        img_result = await db.execute(img_stmt)
+        img_chunks = img_result.scalars().all()
+
+        existing_ids = {chunk.id for chunk in matched_chunks}
+        for img_chunk in img_chunks:
+            if img_chunk.id not in existing_ids:
+                matched_chunks.append(img_chunk)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
