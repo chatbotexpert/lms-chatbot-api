@@ -129,9 +129,9 @@ async def stream_chat_completion(
     # Initialize messages list
     messages = [{"role": "system", "content": system_prompt}]
     
-    # Include chat history if present
+    # Include chat history if present (limit to last 6 messages to cap token cost)
     if chat_history:
-        for item in chat_history:
+        for item in chat_history[-6:]:
             messages.append({"role": item.role, "content": item.content})
             
     # Include user query
