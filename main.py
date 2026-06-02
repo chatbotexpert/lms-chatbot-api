@@ -232,11 +232,15 @@ async def chat(
             detail=f"Failed to generate query embedding: {str(e)}"
         )
 
-    # 2. Unified pgvector Cosine Similarity Query (Retrieves both text and image descriptions semantically)
+    # 2. Unified pgvector Cosine Similarity Query with Distance Threshold
+    # Filters out unrelated chunks (distance >= 0.65) and returns up to the top 5 closest matches.
     try:
         stmt = (
             select(LessonChunk)
-            .where(LessonChunk.lesson_id == payload.lesson_id)
+            .where(
+                LessonChunk.lesson_id == payload.lesson_id,
+                LessonChunk.embedding.cosine_distance(query_vector) < 0.65
+            )
             .order_by(LessonChunk.embedding.cosine_distance(query_vector))
             .limit(5)
         )
