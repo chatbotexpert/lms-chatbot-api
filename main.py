@@ -233,13 +233,13 @@ async def chat(
         )
 
     # 2. Unified pgvector Cosine Similarity Query with Distance Threshold
-    # Filters out unrelated chunks (distance >= 0.65) and returns up to the top 5 closest matches.
+    # Filters out unrelated chunks (distance >= 0.78) and returns up to the top 5 closest matches.
     try:
         stmt = (
             select(LessonChunk)
             .where(
                 LessonChunk.lesson_id == payload.lesson_id,
-                LessonChunk.embedding.cosine_distance(query_vector) < 0.65
+                LessonChunk.embedding.cosine_distance(query_vector) < 0.78
             )
             .order_by(LessonChunk.embedding.cosine_distance(query_vector))
             .limit(5)
