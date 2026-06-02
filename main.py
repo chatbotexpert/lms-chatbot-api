@@ -232,50 +232,16 @@ async def chat(
             detail=f"Failed to generate query embedding: {str(e)}"
         )
 
-    # 2. Strict Metadata Filtered pgvector Cosine Similarity Query (Text Chunks Only by default)
+    # 2. Unified pgvector Cosine Similarity Query (Retrieves both text and image descriptions semantically)
     try:
         stmt = (
             select(LessonChunk)
-            .where(
-                LessonChunk.lesson_id == payload.lesson_id,
-                LessonChunk.chunk_type == "text"
-            )
+            .where(LessonChunk.lesson_id == payload.lesson_id)
             .order_by(LessonChunk.embedding.cosine_distance(query_vector))
             .limit(5)
         )
         result = await db.execute(stmt)
         matched_chunks = list(result.scalars().all())
-
-        # Check if the student's query refers to images/visuals
-        msg_lower = payload.message.lower()
-        image_keywords = {
-            "image", "images", "picture", "pictures", "photo", "photos", "graphic", "graphics", "chart", "charts",
-            "diagram", "diagrams", "visual", "visuals", "illustration", "illustrations", "screenshot", "screenshots",
-            "draw", "drawing", "drawings", "map", "maps", "table", "tables",
-            "imagen", "imágenes", "imagenes", "foto", "fotos", "gráfico", "gráficos", "grafico", "graficos",
-            "tabla", "tablas", "dibujo", "dibujos", "ilustración", "ilustraciones", "ilustracion", "captura", 
-            "capturas", "pantalla", "pantallas", "ver", "vista", "esquema", "esquemas", "mapa", "mapas"
-        }
-        query_mentions_images = any(kw in msg_lower for kw in image_keywords)
-
-        # Only fetch and append image description chunks if the query actually asks about visuals/images.
-        # This keeps token costs extremely low for standard textual questions.
-        if query_mentions_images:
-            img_stmt = (
-                select(LessonChunk)
-                .where(
-                    LessonChunk.lesson_id == payload.lesson_id,
-                    LessonChunk.chunk_type == "image_description"
-                )
-            )
-            img_result = await db.execute(img_stmt)
-            img_chunks = img_result.scalars().all()
-
-            existing_ids = {chunk.id for chunk in matched_chunks}
-            for img_chunk in img_chunks:
-                if img_chunk.id not in existing_ids:
-                    matched_chunks.append(img_chunk)
-
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
