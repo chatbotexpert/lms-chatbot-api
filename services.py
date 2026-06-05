@@ -34,13 +34,13 @@ async def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
 
 async def analyze_image_with_vision(image_url: str, index: int, semaphore: asyncio.Semaphore) -> Optional[str]:
     """
-    Calls the OpenAI Vision API (gpt-4o) to describe the image content for retrieval.
+    Calls the OpenAI Vision API (gpt-4o-mini) to describe the image content for retrieval.
     Concurrency is bounded by the provided semaphore.
     """
     async with semaphore:
         try:
             response = await openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "user",
@@ -89,7 +89,7 @@ async def stream_chat_completion(
     chat_history: Optional[List[ChatHistoryItem]] = None
 ) -> AsyncGenerator[str, None]:
     """
-    Streams response from gpt-4o context-locked model.
+    Streams response from gpt-4o-mini context-locked model.
     Yields chunks formatted as Server-Sent Events (SSE).
     """
     # If no context chunks are found (lesson not ingested or has no text/images), refuse immediately
@@ -140,7 +140,7 @@ async def stream_chat_completion(
     
     try:
         stream = await openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=messages,
             temperature=0.0,
             stream=True

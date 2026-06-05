@@ -213,6 +213,11 @@ async def ingest(
         chunks_created=len(new_chunks)
     )
 
+@app.post("/api/test")
+async def image_test(images:list[str]):
+    print(images)
+    return {"message": "success" , "images":images}
+
 @app.post("/api/chat")
 async def chat(
     payload: ChatPayload,
@@ -221,7 +226,7 @@ async def chat(
 ):
     """
     Endpoint 2: Context-Locked RAG Chat with Server-Sent Events (SSE) Streaming.
-    Generates query embedding, performs strict metadata filtering, and streams gpt-4o response.
+    Generates query embedding, performs strict metadata filtering, and streams gpt-4o-mini response.
     """
     # 1. Generate vector embedding for user query
     try:
@@ -266,3 +271,5 @@ if __name__ == "__main__":
     import uvicorn
     # Start uvicorn server on port 7000
     uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True)
+
+
