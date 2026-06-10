@@ -220,6 +220,7 @@ async def ingest_test(payload: IngestPayload):
     No auth required. Returns a breakdown so you can verify the data format
     without digging through Vercel logs.
     """
+    print(payload)
     return {
         "received": payload
     }
