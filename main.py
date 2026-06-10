@@ -219,7 +219,7 @@ async def image_test(
     db: AsyncSession = Depends(get_db),
     _=Depends(verify_api_key)):
     print(payload)
-    return 
+    return {"message": "success" , "payload":payload}
 
 @app.post("/api/chat")
 async def chat(
