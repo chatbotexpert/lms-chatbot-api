@@ -214,12 +214,24 @@ async def ingest(
     )
 
 @app.post("/api/test")
-async def image_test(
-    payload: ChatPayload,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(verify_api_key)):
-    print(payload)
-    return {"message": "success" , "payload":payload}
+async def ingest_test(payload: IngestPayload):
+    """
+    Debug endpoint: echoes back exactly what was received from WordPress.
+    No auth required. Returns a breakdown so you can verify the data format
+    without digging through Vercel logs.
+    """
+    return {
+        "received": {
+            "lesson_id":         payload.lesson_id,
+            "instructor_id":     payload.instructor_id,
+            "content_length":    len(payload.content),
+            "content_preview":   payload.content[:300] + "..." if len(payload.content) > 300 else payload.content,
+            "image_count":       len(payload.image_urls),
+            "image_urls":        payload.image_urls,
+            "images_are_base64": any(url.startswith("data:") for url in payload.image_urls),
+            "images_are_links":  all(url.startswith("http") for url in payload.image_urls) if payload.image_urls else True,
+        }
+    }
 
 @app.post("/api/chat")
 async def chat(
