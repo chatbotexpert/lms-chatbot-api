@@ -221,16 +221,7 @@ async def ingest_test(payload: IngestPayload):
     without digging through Vercel logs.
     """
     return {
-        "received": {
-            "lesson_id":         payload.lesson_id,
-            "instructor_id":     payload.instructor_id,
-            "content_length":    len(payload.content),
-            "content_preview":   payload.content[:300] + "..." if len(payload.content) > 300 else payload.content,
-            "image_count":       len(payload.image_urls),
-            "image_urls":        payload.image_urls,
-            "images_are_base64": any(url.startswith("data:") for url in payload.image_urls),
-            "images_are_links":  all(url.startswith("http") for url in payload.image_urls) if payload.image_urls else True,
-        }
+        "received": payload
     }
 
 @app.post("/api/chat")
