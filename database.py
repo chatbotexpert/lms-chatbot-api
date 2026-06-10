@@ -5,8 +5,8 @@ from sqlalchemy.orm import declarative_base
 
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-# Load environment variables
-load_dotenv()
+# Load environment variables, overriding system environment variables if present
+load_dotenv(override=True)
 
 # Database URL configuration (PostgreSQL with asyncpg driver)
 DATABASE_URL = os.getenv("DATABASE_URL")

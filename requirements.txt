@@ -9,3 +9,4 @@ asyncpg>=0.28.0
 pgvector>=0.2.0
 openai>=1.0.0
 uvicorn>=0.22.0
+html2text>=2024.2.26

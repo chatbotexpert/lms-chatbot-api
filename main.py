@@ -214,9 +214,12 @@ async def ingest(
     )
 
 @app.post("/api/test")
-async def image_test(images:list[str]):
-    print(images)
-    return {"message": "success" , "images":images}
+async def image_test(
+    payload: ChatPayload,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_api_key)):
+    print(payload)
+    return 
 
 @app.post("/api/chat")
 async def chat(
