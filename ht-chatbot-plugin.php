@@ -57,6 +57,14 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
     }
     $image_urls = array_values(array_unique($image_urls));
 
+    // ── Rewrite image domain to the live Hostinger site ──────────────────────
+    $old_domain = 'https://howtoselfhost.com';
+    $new_domain = 'https://lightgreen-ram-993606.hostingersite.com';
+    $image_urls = array_map(function($url) use ($old_domain, $new_domain) {
+        return str_replace($old_domain, $new_domain, $url);
+    }, $image_urls);
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Send image URLs directly — the FastAPI backend fetches and analyzes them via vision model
     $payload = array(
         'lesson_id'     => (string)$post_id,
