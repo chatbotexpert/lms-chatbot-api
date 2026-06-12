@@ -177,7 +177,6 @@ async def ingest(
         new_chunks.append(
             LessonChunk(
                 lesson_id=payload.lesson_id,
-                instructor_id=payload.instructor_id,
                 chunk_type="text",
                 content=chunk,
                 embedding=embeddings[i]
@@ -190,7 +189,6 @@ async def ingest(
         new_chunks.append(
             LessonChunk(
                 lesson_id=payload.lesson_id,
-                instructor_id=payload.instructor_id,
                 chunk_type="image_description",
                 content=desc,
                 embedding=embeddings[offset + j]

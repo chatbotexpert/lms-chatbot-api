@@ -9,7 +9,6 @@ class LessonChunk(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     lesson_id = Column(String, nullable=False, index=True)
-    instructor_id = Column(String, nullable=False)
     chunk_type = Column(String, nullable=False)  # 'text' or 'image_description'
     content = Column(Text, nullable=False)
     embedding = Column(Vector(1536), nullable=False)

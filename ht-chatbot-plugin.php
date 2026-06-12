@@ -59,8 +59,7 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
 
     // Send image URLs directly — the FastAPI backend fetches and analyzes them via vision model
     $payload = array(
-        'lesson_id'     => 'lesson_' . $post_id,
-        'instructor_id' => 'instructor_' . $post->post_author,
+        'lesson_id'     => (string)$post_id,
         'content'       => $clean_text,
         'image_urls'    => $image_urls
     );
@@ -82,8 +81,16 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
     if (is_wp_error($response)) {
         error_log("Ingestion failed: " . $response->get_error_message());
     } else {
-        error_log("Ingestion response code: " . wp_remote_retrieve_response_code($response));
-        error_log("Ingestion response body: " . wp_remote_retrieve_body($response));
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        error_log("Ingestion response code: " . $code);
+        error_log("Ingestion response body: " . $body);
+
+        // ── Mark this post as chatbot-enabled only on successful ingestion ──
+        if ($code >= 200 && $code < 300) {
+            update_post_meta($post_id, 'chatbot_enabled', '1');
+            error_log("Chatbot enabled for post ID: " . $post_id);
+        }
     }
 }
 
@@ -97,12 +104,18 @@ add_action('wp_footer', 'ht_inject_chatbot_ui');
 function ht_inject_chatbot_ui() {
     if (!is_single() && !is_category()) return;
 
+    // Only show chatbot on single posts that have been ingested (chatbot_enabled = 1)
+    if (is_single()) {
+        global $post;
+        if (!get_post_meta($post->ID, 'chatbot_enabled', true)) return;
+    }
+
     if (is_category()) {
         $category   = get_queried_object();
         $context_id = 'category_' . $category->slug;
     } else {
         global $post;
-        $context_id = 'lesson_' . $post->ID;
+        $context_id = (string)$post->ID;
     }
     ?>
     <script>window.WP_CHAT_CONTEXT = { lesson_id: "<?php echo esc_js($context_id); ?>" };</script>
@@ -133,6 +146,12 @@ function ht_inject_chatbot_ui() {
 add_action('wp_head', 'ht_inject_chatbot_styles');
 function ht_inject_chatbot_styles() {
     if (!is_single() && !is_category()) return;
+
+    // Only inject styles on posts where chatbot is enabled
+    if (is_single()) {
+        global $post;
+        if (!get_post_meta($post->ID, 'chatbot_enabled', true)) return;
+    }
     ?>
     <style>
         /* ── Widget Container ─────────────────────────────────────────────── */
@@ -371,6 +390,12 @@ function ht_inject_chatbot_styles() {
 add_action('wp_footer', 'ht_inject_chatbot_js', 99);
 function ht_inject_chatbot_js() {
     if (!is_single() && !is_category()) return;
+
+    // Only inject JS on posts where chatbot is enabled
+    if (is_single()) {
+        global $post;
+        if (!get_post_meta($post->ID, 'chatbot_enabled', true)) return;
+    }
     ?>
     <!-- Load marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

@@ -2,8 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 class IngestPayload(BaseModel):
-    lesson_id: str = Field(..., description="ID of the WordPress lesson, e.g., 'lesson_123'")
-    instructor_id: str = Field(..., description="ID of the instructor, e.g., 'instructor_4'")
+    lesson_id: str = Field(..., description="Raw WordPress post ID, e.g., '2980'")
     content: str = Field(..., description="The main text content of the lesson")
     image_urls: List[str] = Field(default_factory=list, description="URLs of images in the lesson to parse with vision model")
 
