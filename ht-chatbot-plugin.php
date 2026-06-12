@@ -43,7 +43,10 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    $clean_text = wp_strip_all_tags(strip_shortcodes($post->post_content)) . $video_context;
+    $clean_text = wp_strip_all_tags(strip_shortcodes($post->post_content));
+    $clean_text = str_replace("\r\n", "\n", $clean_text);   // normalize Windows line endings
+    $clean_text = preg_replace('/\n{3,}/', "\n\n", $clean_text); // collapse 3+ newlines → max 2
+    $clean_text = trim($clean_text) . $video_context;
 
     // ── Extract images ────────────────────────────────────────────────────────
     $image_urls = array();

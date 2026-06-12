@@ -148,12 +148,7 @@ async def ingest(
     # 3. Asynchronous Image Vision: Fetch descriptions concurrently with Semaphore(5)
     image_descriptions = []
     if payload.image_urls:
-        # Rewrite old staging domain to live Hostinger domain (safety net for any client)
-        rewritten_urls = [
-            url.replace("https://howtoselfhost.com", "https://lightgreen-ram-993606.hostingersite.com")
-            for url in payload.image_urls
-        ]
-        image_descriptions = await analyze_images_concurrently(rewritten_urls)
+        image_descriptions = await analyze_images_concurrently(payload.image_urls)
 
     # Combine all segments (text chunks followed by image descriptions)
     all_chunks_text = text_chunks + image_descriptions
