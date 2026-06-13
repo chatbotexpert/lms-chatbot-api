@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL + pgvector ──────────────────────────────────────────────────
+  lms-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: lms-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: lms_user
+      POSTGRES_PASSWORD: HashTurn@0900
+      POSTGRES_DB: lms_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI App ────────────────────────────────────────────────────────────
+  lms-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lms-api
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override DATABASE_URL to use Docker internal hostname (not the VPS IP)
+      DATABASE_URL: postgresql+asyncpg://lms_user:HashTurn@0900@lms-postgres:5432/lms_db
+    depends_on:
+      lms-postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    # Use existing named volume so your data is NOT lost on restart
+    name: lms-postgres-data
+    external: false
