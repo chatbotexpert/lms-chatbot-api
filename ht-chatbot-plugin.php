@@ -11,7 +11,7 @@
 add_action('save_post', 'ht_sync_lesson_to_fastapi', 10, 3);
 function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-    if ($post->post_status !== 'publish') return;
+    if (!in_array($post->post_status, ['publish', 'private'])) return;
     if ($post->post_type !== 'post') return; // Adjust to 'lesson' if using a Custom Post Type
 
     // ── Extract video context BEFORE stripping tags ──────────────────────────
