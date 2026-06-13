@@ -5,8 +5,10 @@ from sqlalchemy.orm import declarative_base
 
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-# Load environment variables, overriding system environment variables if present
-load_dotenv(override=True)
+# Load environment variables from .env file.
+# override=False means Docker/system env vars take priority over .env file.
+# This is correct for containerized deployments where Docker sets DATABASE_URL.
+load_dotenv(override=False)
 
 # Database URL configuration (PostgreSQL with asyncpg driver)
 DATABASE_URL = os.getenv("DATABASE_URL")
