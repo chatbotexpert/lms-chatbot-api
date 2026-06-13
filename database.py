@@ -2,53 +2,84 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.engine.url import URL
 
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-
-# Load environment variables from .env file.
-# override=False means Docker/system env vars take priority over .env file.
-# This is correct for containerized deployments where Docker sets DATABASE_URL.
+# Load .env file. override=False means system/Docker env vars always win.
 load_dotenv(override=False)
 
-# Database URL configuration (PostgreSQL with asyncpg driver)
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/lms_rag"
+# ── Build connection URL from individual parts ────────────────────────────────
+# This avoids ALL URL-parsing issues caused by special characters (e.g. @)
+# in the password. Each value is passed as a plain string, no encoding needed.
 
-# Auto-correct postgresql:// to postgresql+asyncpg://
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+# If DATABASE_URL is set (legacy / Neon), fall back to parsing it.
+# Otherwise, use individual DB_* variables (preferred for Docker deployments).
+_raw_url = os.getenv("DATABASE_URL", "")
 
-# Clean query parameters for asyncpg (e.g. sslmode, channel_binding)
-connect_args = {}
-try:
-    parsed_url = urlparse(DATABASE_URL)
-    query_params = dict(parse_qsl(parsed_url.query))
-
-    use_ssl = False
-    if "sslmode" in query_params:
-        if query_params["sslmode"] in ("require", "verify-full", "verify-ca"):
-            use_ssl = True
-        del query_params["sslmode"]
-
-    if "channel_binding" in query_params:
-        del query_params["channel_binding"]
-
-    # Rebuild URL without the unsupported parameters
-    new_query = urlencode(query_params)
-    DATABASE_URL = urlunparse(parsed_url._replace(query=new_query))
-    
-    if use_ssl:
-        connect_args["ssl"] = True
-except Exception:
+if _raw_url and "neon.tech" not in _raw_url:
+    # It's a non-Neon URL — parse individual components safely using SQLAlchemy's URL builder
+    # We still use individual env vars as the primary method for Docker
     pass
 
-# Create asynchronous engine
+# Individual env vars take priority (cleanest for Docker)
+DB_HOST     = os.getenv("DB_HOST")
+DB_PORT     = os.getenv("DB_PORT")
+DB_USER     = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME     = os.getenv("DB_NAME")
+
+if DB_HOST and DB_USER and DB_PASSWORD and DB_NAME:
+    # Use individual vars — no URL parsing, no encoding issues
+    engine_url = URL.create(
+        drivername="postgresql+asyncpg",
+        username=DB_USER,
+        password=DB_PASSWORD,   # SQLAlchemy handles special chars automatically
+        host=DB_HOST,
+        port=int(DB_PORT) if DB_PORT else 5432,
+        database=DB_NAME,
+    )
+    connect_args = {}
+    use_ssl = os.getenv("DB_SSL", "false").lower() in ("true", "1", "yes")
+    if use_ssl:
+        connect_args["ssl"] = True
+else:
+    # Fallback: parse DATABASE_URL string (legacy support / Neon)
+    from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+    DATABASE_URL = _raw_url or "postgresql+asyncpg://postgres:postgres@localhost:5432/lms_rag"
+
+    if DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    connect_args = {}
+    try:
+        parsed_url = urlparse(DATABASE_URL)
+        query_params = dict(parse_qsl(parsed_url.query))
+
+        use_ssl = False
+        if "sslmode" in query_params:
+            if query_params["sslmode"] in ("require", "verify-full", "verify-ca"):
+                use_ssl = True
+            del query_params["sslmode"]
+
+        if "channel_binding" in query_params:
+            del query_params["channel_binding"]
+
+        new_query = urlencode(query_params)
+        DATABASE_URL = urlunparse(parsed_url._replace(query=new_query))
+
+        if use_ssl:
+            connect_args["ssl"] = True
+    except Exception:
+        pass
+
+    engine_url = DATABASE_URL
+
+# ── Create async engine ───────────────────────────────────────────────────────
 engine = create_async_engine(
-    DATABASE_URL,
+    engine_url,
     echo=False,
     future=True,
-    connect_args=connect_args
+    connect_args=connect_args,
 )
 
 # Async session maker

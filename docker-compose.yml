@@ -31,10 +31,15 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - .env                   # loads OPENAI_API_KEY, LMS_API_KEY, ALLOWED_ORIGINS from VPS .env
     environment:
-      # Override DATABASE_URL to use Docker internal hostname (not the VPS IP)
-      DATABASE_URL: postgresql+asyncpg://lms_user:HashTurn@0900@lms-postgres:5432/lms_db
+      # DB vars override .env — avoids URL parsing issues with @ in password
+      DB_HOST: lms-postgres
+      DB_PORT: "5432"
+      DB_USER: lms_user
+      DB_PASSWORD: "HashTurn@0900"
+      DB_NAME: lms_db
+      DB_SSL: "false"
     depends_on:
       lms-postgres:
         condition: service_healthy
