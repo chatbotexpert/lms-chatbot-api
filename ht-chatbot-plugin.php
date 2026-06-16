@@ -60,13 +60,6 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
     }
     $image_urls = array_values(array_unique($image_urls));
 
-    // ── Rewrite image domain to the live Hostinger site ──────────────────────
-    $old_domain = 'https://howtoselfhost.com';
-    $new_domain = 'https://lightgreen-ram-993606.hostingersite.com';
-    $image_urls = array_map(function($url) use ($old_domain, $new_domain) {
-        return str_replace($old_domain, $new_domain, $url);
-    }, $image_urls);
-    // ─────────────────────────────────────────────────────────────────────────
 
     // Send image URLs directly — the FastAPI backend fetches and analyzes them via vision model
     $payload = array(
@@ -75,7 +68,7 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
         'image_urls'    => $image_urls
     );
 
-    $api_url = 'https://lms-chatbot-api.vercel.app/api/ingest';
+    $api_url = 'https://db.hashturn.net/api/ingest';
     $api_key = 'test_key_123';
 
     $response = wp_remote_post($api_url, array(
@@ -168,176 +161,177 @@ function ht_inject_chatbot_styles() {
         /* ── Widget Container ─────────────────────────────────────────────── */
         #ht-chat-widget {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
+            bottom: 28px;
+            right: 28px;
             z-index: 999999;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
         }
 
-        /* ── Toggle Button — Red brand color, CSS background-image SVG (theme-proof) ── */
+        /* ── Toggle Button — exact site red #CC0000 ───────────────────────── */
         .ht-chat-btn {
-            width: 60px;
-            height: 60px;
-            background-color: #CC1111;
-            /* Chat bubble SVG — white icon on red background */
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+            width: 58px;
+            height: 58px;
+            background-color: #CC0000;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: center center;
-            background-size: 28px 28px;
+            background-size: 26px 26px;
             border-radius: 50%;
             border: none;
             cursor: pointer;
-            box-shadow: 0 4px 20px rgba(204, 17, 17, 0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 3px 10px rgba(204, 0, 0, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
             padding: 0;
             outline: none;
             -webkit-appearance: none;
             appearance: none;
         }
         .ht-chat-btn:hover {
-            transform: scale(1.08);
-            background-color: #aa0e0e;
-            box-shadow: 0 6px 24px rgba(204, 17, 17, 0.55);
+            transform: scale(1.07);
+            background-color: #aa0000;
+            box-shadow: 0 5px 16px rgba(204, 0, 0, 0.48);
         }
 
-        /* ── Chat Window ──────────────────────────────────────────────────── */
+        /* ── Chat Window — clean white card matching site design ──────────── */
         #ht-chat-window {
-            width: 360px;
-            height: 500px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(204, 17, 17, 0.15);
-            border-radius: 16px;
+            width: 355px;
+            height: 490px;
+            background: #ffffff;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
             position: absolute;
-            bottom: 80px;
+            bottom: 76px;
             right: 0;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 8px 40px rgba(204, 17, 17, 0.15), 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0,0,0,0.06);
             overflow: hidden;
         }
         .ht-chat-hidden { display: none !important; }
 
-        /* ── Header — matches site's red brand ────────────────────────────── */
+        /* ── Header — site red #CC0000 bar ───────────────────────────────── */
         .ht-chat-header {
-            background: linear-gradient(135deg, #CC1111 0%, #a80d0d 100%);
-            color: white;
-            padding: 14px 16px;
+            background: #CC0000;
+            color: #ffffff;
+            padding: 12px 14px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 3px solid rgba(0,0,0,0.1);
+            flex-shrink: 0;
         }
         .ht-chat-header h3 {
             margin: 0;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
-            color: white;
-            letter-spacing: 0.3px;
+            color: #ffffff;
+            letter-spacing: 0.2px;
         }
         #ht-chat-close {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.18);
             border: none;
-            color: white;
-            font-size: 20px;
+            color: #ffffff;
+            font-size: 18px;
             cursor: pointer;
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             line-height: 1;
-            transition: background 0.2s;
+            transition: background 0.15s ease;
             padding: 0;
+            flex-shrink: 0;
         }
-        #ht-chat-close:hover { background: rgba(255,255,255,0.3); }
+        #ht-chat-close:hover { background: rgba(255, 255, 255, 0.32); }
 
-        /* ── Message Body ─────────────────────────────────────────────────── */
+        /* ── Message Body — light gray like site background ───────────────── */
         .ht-chat-body {
             flex: 1;
-            padding: 15px;
+            padding: 14px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 9px;
             font-size: 14px;
+            background: #f5f5f5;
         }
-        .ht-chat-body::-webkit-scrollbar { width: 6px; }
+        .ht-chat-body::-webkit-scrollbar { width: 5px; }
         .ht-chat-body::-webkit-scrollbar-track { background: transparent; }
-        .ht-chat-body::-webkit-scrollbar-thumb { background: rgba(204, 17, 17, 0.2); border-radius: 10px; }
-        .ht-chat-body::-webkit-scrollbar-thumb:hover { background: rgba(204, 17, 17, 0.4); }
+        .ht-chat-body::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 10px; }
+        .ht-chat-body::-webkit-scrollbar-thumb:hover { background: #aaaaaa; }
 
         /* ── Message Bubbles ──────────────────────────────────────────────── */
         .ht-message {
-            padding: 10px 14px;
-            border-radius: 12px;
-            max-width: 85%;
-            line-height: 1.4;
+            padding: 9px 13px;
+            border-radius: 4px;
+            max-width: 86%;
+            line-height: 1.45;
             word-wrap: break-word;
+            font-size: 13.5px;
         }
         .ht-message.system {
-            background: #fff3f3;
-            color: #7a0000;
+            background: #ffffff;
+            color: #555555;
             align-self: flex-start;
-            border-bottom-left-radius: 2px;
-            border: 1px solid rgba(204,17,17,0.1);
+            border: 1px solid #e0e0e0;
+            border-left: 3px solid #CC0000;
             font-style: italic;
             font-size: 13px;
         }
         .ht-message.user {
-            background: linear-gradient(135deg, #CC1111, #a80d0d);
-            color: white;
+            background: #CC0000;
+            color: #ffffff;
             align-self: flex-end;
-            border-bottom-right-radius: 2px;
-            box-shadow: 0 2px 8px rgba(204,17,17,0.25);
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(204, 0, 0, 0.22);
         }
         .ht-message.bot {
-            background: #fff8f8;
-            color: #2d0000;
+            background: #ffffff;
+            color: #333333;
             align-self: flex-start;
-            border-bottom-left-radius: 2px;
-            border: 1px solid rgba(204,17,17,0.1);
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
         }
 
         /* ── Markdown Styles for Bot Responses ───────────────────────────── */
-        /* ── Markdown Styles for Bot Responses — red accent palette ─────── */
         .ht-message.bot h1,
         .ht-message.bot h2,
         .ht-message.bot h3,
-        .ht-message.bot h4 { margin: 10px 0 6px 0; font-size: 15px; font-weight: 700; color: #CC1111; }
+        .ht-message.bot h4 { margin: 10px 0 5px 0; font-size: 14px; font-weight: 700; color: #CC0000; }
         .ht-message.bot h1:first-child,
         .ht-message.bot h2:first-child,
         .ht-message.bot h3:first-child { margin-top: 0; }
-        .ht-message.bot p { margin: 0 0 8px 0; }
+        .ht-message.bot p { margin: 0 0 7px 0; }
         .ht-message.bot p:last-child { margin-bottom: 0; }
         .ht-message.bot ul,
-        .ht-message.bot ol { margin: 6px 0 10px 0; padding-left: 20px; }
-        .ht-message.bot li { margin-bottom: 4px; }
+        .ht-message.bot ol { margin: 5px 0 9px 0; padding-left: 20px; }
+        .ht-message.bot li { margin-bottom: 3px; }
+        .ht-message.bot a { color: #CC0000; text-decoration: underline; }
         .ht-message.bot code {
-            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-            background: rgba(204, 17, 17, 0.08);
+            font-family: "Courier New", Consolas, monospace;
+            background: #f2f2f2;
             padding: 2px 5px;
-            border-radius: 4px;
-            font-size: 13px;
-            color: #990000;
+            border-radius: 3px;
+            font-size: 12.5px;
+            color: #333333;
+            border: 1px solid #e0e0e0;
         }
         .ht-message.bot pre {
-            background: rgba(204, 17, 17, 0.04);
-            padding: 8px 12px;
-            border-radius: 8px;
+            background: #f5f5f5;
+            padding: 8px 10px;
+            border-radius: 4px;
             overflow-x: auto;
-            margin: 8px 0;
-            border: 1px solid rgba(204, 17, 17, 0.1);
+            margin: 7px 0;
+            border: 1px solid #e0e0e0;
         }
-        .ht-message.bot pre code { background: none; padding: 0; font-size: 13px; }
-        .ht-message.bot strong { font-weight: 700; color: #990000; }
+        .ht-message.bot pre code { background: none; padding: 0; border: none; font-size: 12.5px; }
+        .ht-message.bot strong { font-weight: 700; color: #222222; }
         .ht-message.bot blockquote {
-            border-left: 3px solid rgba(204, 17, 17, 0.35);
+            border-left: 3px solid #CC0000;
             padding-left: 10px;
-            margin: 8px 0;
-            color: #7a0000;
+            margin: 7px 0;
+            color: #666666;
             font-style: italic;
         }
 
@@ -345,19 +339,21 @@ function ht_inject_chatbot_styles() {
         .ht-chat-footer {
             padding: 10px;
             display: flex;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.5);
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            gap: 7px;
+            background: #ffffff;
+            border-top: 1px solid #e0e0e0;
             align-items: flex-end;
+            flex-shrink: 0;
         }
         #ht-chat-input {
             flex: 1;
-            padding: 9px 12px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 8px 11px;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            font-size: 13.5px;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
             outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
             resize: none;
             height: 38px;
             min-height: 38px;
@@ -365,31 +361,35 @@ function ht_inject_chatbot_styles() {
             box-sizing: border-box;
             overflow-y: hidden;
             line-height: 1.4;
+            color: #333333;
+            background: #fafafa;
         }
+        #ht-chat-input::placeholder { color: #999999; }
         #ht-chat-input:focus {
-            border-color: #CC1111;
-            box-shadow: 0 0 0 2px rgba(204, 17, 17, 0.15);
+            border-color: #CC0000;
+            box-shadow: 0 0 0 2px rgba(204, 0, 0, 0.12);
+            background: #ffffff;
         }
         #ht-chat-send {
-            background: linear-gradient(135deg, #CC1111, #a80d0d);
-            color: white;
+            background: #CC0000;
+            color: #ffffff;
             border: none;
-            padding: 0 16px;
-            border-radius: 8px;
+            padding: 0 15px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13.5px;
             font-weight: 600;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
             height: 38px;
             box-sizing: border-box;
-            transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 2px 8px rgba(204, 17, 17, 0.3);
-            letter-spacing: 0.3px;
+            transition: background-color 0.15s ease, transform 0.1s ease;
+            letter-spacing: 0.2px;
         }
         #ht-chat-send:hover {
-            background: linear-gradient(135deg, #aa0d0d, #8a0a0a);
+            background: #aa0000;
             transform: translateY(-1px);
         }
-        #ht-chat-send:active { transform: translateY(0); }
+        #ht-chat-send:active { transform: translateY(0); background: #990000; }
     </style>
     <?php
 }
@@ -462,7 +462,7 @@ function ht_inject_chatbot_js() {
             let accumulatedResponse = '';
 
             try {
-                const response = await fetch('https://lms-chatbot-api.vercel.app/api/chat', {
+                const response = await fetch('https://db.hashturn.net/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

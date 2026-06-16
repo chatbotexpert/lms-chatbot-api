@@ -13,8 +13,9 @@ services:
       POSTGRES_DB: lms_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5434:5432"
+    # DB hidden — only accessible inside Docker network
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
       interval: 10s
@@ -28,12 +29,12 @@ services:
       dockerfile: Dockerfile
     container_name: lms-api
     restart: always
-    ports:
-      - "8000:8000"
+    # No public port — Nginx is the only entry point
+    expose:
+      - "8000"
     env_file:
-      - .env                   # loads OPENAI_API_KEY, LMS_API_KEY, ALLOWED_ORIGINS from VPS .env
+      - .env
     environment:
-      # DB vars override .env — avoids URL parsing issues with @ in password
       DB_HOST: lms-postgres
       DB_PORT: "5432"
       DB_USER: lms_user
@@ -44,8 +45,22 @@ services:
       lms-postgres:
         condition: service_healthy
 
+  # ── Nginx Reverse Proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"     # HTTP  (redirects to HTTPS)
+      - "443:443"   # HTTPS (main entry point)
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro          # SSL certs from Certbot
+      - /var/www/certbot:/var/www/certbot:ro           # Cert renewal challenge
+    depends_on:
+      - lms-api
+
 volumes:
   postgres_data:
-    # Use existing named volume so your data is NOT lost on restart
     name: lms-postgres-data
     external: false
