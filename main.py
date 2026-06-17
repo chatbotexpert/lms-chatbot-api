@@ -13,7 +13,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from database import engine, Base, get_db
 from models import LessonChunk
-from schemas import IngestPayload, ChatPayload, IngestResponse, SimpleChatPayload
+from schemas import (
+    IngestPayload, 
+    ChatPayload, 
+    IngestResponse, 
+    SimpleChatPayload,
+    BatchIngestPayload,
+    BatchIngestResponse
+)
 from services import (
     get_embedding,
     get_embeddings_batch,
@@ -209,6 +216,96 @@ async def ingest(
         success=True,
         message=f"Successfully ingested lesson '{payload.lesson_id}' with {len(text_chunks)} text chunks and {len(image_descriptions)} image descriptions.",
         chunks_created=len(new_chunks)
+    )
+
+@app.post("/api/ingest/batch", response_model=BatchIngestResponse)
+async def ingest_batch(
+    payload: BatchIngestPayload,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_api_key)
+):
+    """
+    Endpoint 3: Ingests multiple lessons in a single batch payload.
+    Processes each lesson dynamically, generates vector embeddings, and persists to db.
+    """
+    total_chunks_created = 0
+    processed_count = 0
+    errors = []
+
+    for record in payload.records:
+        try:
+            # 1. Idempotency: Delete previous entries matching the incoming lesson_id
+            await db.execute(delete(LessonChunk).where(LessonChunk.lesson_id == record.lesson_id))
+
+            # 2. Dynamic Chunking: Split text content (approx 1,000 chars, 200 overlap)
+            text_chunks = []
+            if record.content and record.content.strip():
+                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+                text_chunks = splitter.split_text(record.content)
+
+            # 3. Asynchronous Image Vision
+            image_descriptions = []
+            if record.image_urls:
+                image_descriptions = await analyze_images_concurrently(record.image_urls)
+
+            # Combine all segments
+            all_chunks_text = text_chunks + image_descriptions
+
+            if not all_chunks_text:
+                processed_count += 1
+                continue
+
+            # 4. Batch Vectorization: Generate OpenAI embeddings for all chunks of the post
+            embeddings = await get_embeddings_batch(all_chunks_text)
+
+            # 5. Database Save: Map chunk objects
+            new_chunks = []
+            
+            # Process text chunks
+            for i, chunk in enumerate(text_chunks):
+                new_chunks.append(
+                    LessonChunk(
+                        lesson_id=record.lesson_id,
+                        chunk_type="text",
+                        content=chunk,
+                        embedding=embeddings[i]
+                    )
+                )
+                
+            # Process image description chunks
+            offset = len(text_chunks)
+            for j, desc in enumerate(image_descriptions):
+                new_chunks.append(
+                    LessonChunk(
+                        lesson_id=record.lesson_id,
+                        chunk_type="image_description",
+                        content=desc,
+                        embedding=embeddings[offset + j]
+                    )
+                )
+
+            db.add_all(new_chunks)
+            await db.commit()
+            
+            total_chunks_created += len(new_chunks)
+            processed_count += 1
+            
+        except Exception as e:
+            await db.rollback()
+            err_msg = f"Failed for post {record.lesson_id}: {str(e)}"
+            errors.append(err_msg)
+
+    success = len(errors) == 0
+    message = f"Batch processed. Successfully ingested {processed_count} out of {len(payload.records)} records."
+    if errors:
+        message += f" Encounted {len(errors)} errors."
+
+    return BatchIngestResponse(
+        success=success,
+        message=message,
+        processed_count=processed_count,
+        chunks_created=total_chunks_created,
+        errors=errors
     )
 
 @app.post("/api/test")
