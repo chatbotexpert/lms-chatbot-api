@@ -35,41 +35,53 @@ async def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
 async def analyze_image_with_vision(image_url: str, index: int, semaphore: asyncio.Semaphore) -> Optional[str]:
     """
     Calls the OpenAI Vision API (gpt-4o-mini) to describe the image content for retrieval.
-    Concurrency is bounded by the provided semaphore.
+    Concurrency is bounded by the provided semaphore, with exponential backoff retries for rate limits.
     """
     async with semaphore:
-        try:
-            response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "You are an expert Spanish instructor. Analyze this image from a Spanish lesson summary. "
-                                    "Describe everything happening in it in English, detailing any Spanish vocabulary, grammar points, "
-                                    "visual diagrams, text, or situational context depicted so it can be used for text-based semantic retrieval."
-                                )
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": image_url
+        max_retries = 10
+        backoff_base = 2.0
+        for attempt in range(max_retries):
+            try:
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "You are an expert Spanish instructor. Analyze this image from a Spanish lesson summary. "
+                                        "Describe everything happening in it in English, detailing any Spanish vocabulary, grammar points, "
+                                        "visual diagrams, text, or situational context depicted so it can be used for text-based semantic retrieval."
+                                    )
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": image_url
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=500,
-                temperature=0.0
-            )
-            description = response.choices[0].message.content
-            return f"Image #{index} description: {description}"
-        except Exception as e:
-            print(f"Error describing image #{index}: {e}")
-            return None
+                            ]
+                        }
+                    ],
+                    max_tokens=500,
+                    temperature=0.0
+                )
+                description = response.choices[0].message.content
+                return f"Image #{index} description: {description}"
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "rate_limit" in err_str or "429" in err_str or "rate limit" in err_str
+                
+                if is_rate_limit and attempt < max_retries - 1:
+                    import random
+                    sleep_time = backoff_base * (2 ** attempt) + random.uniform(0.5, 2.5)
+                    print(f"Rate limit (429) hit for image #{index}. Retrying in {sleep_time:.2f}s (Attempt {attempt+1}/{max_retries})...")
+                    await asyncio.sleep(sleep_time)
+                else:
+                    print(f"Error describing image #{index}: {e}")
+                    return None
 
 async def analyze_images_concurrently(image_urls: List[str]) -> List[str]:
     """
@@ -78,7 +90,7 @@ async def analyze_images_concurrently(image_urls: List[str]) -> List[str]:
     if not image_urls:
         return []
     
-    semaphore = asyncio.Semaphore(5)
+    semaphore = asyncio.Semaphore(2)
     tasks = [analyze_image_with_vision(url, i + 1, semaphore) for i, url in enumerate(image_urls)]
     results = await asyncio.gather(*tasks)
     return [r for r in results if r is not None]
