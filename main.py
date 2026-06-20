@@ -69,6 +69,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configurable delay between processing records during batch ingestion (to prevent rate limits)
+BATCH_INGEST_DELAY = float(os.getenv("BATCH_INGEST_DELAY", "2.0"))
+
 # ---------------------------------------------------------
 # Security Dependency
 # ---------------------------------------------------------
@@ -232,7 +235,7 @@ async def ingest_batch(
     processed_count = 0
     errors = []
 
-    for record in payload.records:
+    for idx, record in enumerate(payload.records):
         try:
             # 1. Idempotency: Delete previous entries matching the incoming lesson_id
             await db.execute(delete(LessonChunk).where(LessonChunk.lesson_id == record.lesson_id))
@@ -253,6 +256,8 @@ async def ingest_batch(
 
             if not all_chunks_text:
                 processed_count += 1
+                if idx < len(payload.records) - 1:
+                    await asyncio.sleep(BATCH_INGEST_DELAY)
                 continue
 
             # 4. Batch Vectorization: Generate OpenAI embeddings for all chunks of the post
@@ -294,6 +299,10 @@ async def ingest_batch(
             await db.rollback()
             err_msg = f"Failed for post {record.lesson_id}: {str(e)}"
             errors.append(err_msg)
+
+        # Sleep between records to prevent hitting OpenAI rate limits
+        if idx < len(payload.records) - 1:
+            await asyncio.sleep(BATCH_INGEST_DELAY)
 
     success = len(errors) == 0
     message = f"Batch processed. Successfully ingested {processed_count} out of {len(payload.records)} records."

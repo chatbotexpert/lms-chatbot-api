@@ -32,14 +32,22 @@ async def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
     )
     return [item.embedding for item in response.data]
 
-async def analyze_image_with_vision(image_url: str, index: int, semaphore: asyncio.Semaphore) -> Optional[str]:
+async def analyze_image_with_vision(
+    image_url: str,
+    index: int,
+    semaphore: asyncio.Semaphore,
+    initial_delay: float = 0.0
+) -> Optional[str]:
     """
     Calls the OpenAI Vision API (gpt-4o-mini) to describe the image content for retrieval.
     Concurrency is bounded by the provided semaphore, with exponential backoff retries for rate limits.
     """
+    if initial_delay > 0:
+        await asyncio.sleep(initial_delay)
+
     async with semaphore:
-        max_retries = 10
-        backoff_base = 2.0
+        max_retries = 15
+        backoff_base = 3.0
         for attempt in range(max_retries):
             try:
                 response = await openai_client.chat.completions.create(
@@ -85,13 +93,17 @@ async def analyze_image_with_vision(image_url: str, index: int, semaphore: async
 
 async def analyze_images_concurrently(image_urls: List[str]) -> List[str]:
     """
-    Analyzes multiple image URLs concurrently, limiting concurrency to 5.
+    Analyzes multiple image URLs concurrently, limiting concurrency to 2.
+    Staggers the starts of requests to avoid hitting rate limits instantly.
     """
     if not image_urls:
         return []
     
     semaphore = asyncio.Semaphore(2)
-    tasks = [analyze_image_with_vision(url, i + 1, semaphore) for i, url in enumerate(image_urls)]
+    tasks = [
+        analyze_image_with_vision(url, i + 1, semaphore, initial_delay=i * 0.5)
+        for i, url in enumerate(image_urls)
+    ]
     results = await asyncio.gather(*tasks)
     return [r for r in results if r is not None]
 
