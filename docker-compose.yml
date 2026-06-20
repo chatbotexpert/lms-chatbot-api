@@ -13,9 +13,9 @@ services:
       POSTGRES_DB: lms_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # DB hidden — only accessible inside Docker network
-    expose:
-      - "5432"
+    # Expose DB securely to local loopback (port 5434) so we can SSH tunnel into it
+    ports:
+      - "127.0.0.1:5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
       interval: 10s
