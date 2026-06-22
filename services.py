@@ -57,7 +57,7 @@ async def get_svg_content(url: str) -> Optional[str]:
     for attempt in range(max_attempts):
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=10.0)
+                response = await client.get(url, timeout=3.0)
                 if response.status_code == 200:
                     return response.text
                 else:
@@ -105,7 +105,7 @@ async def get_image_base64(url: str) -> Optional[tuple[str, str]]:
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
-                response = await client.get(url, headers=headers, timeout=15.0, follow_redirects=True)
+                response = await client.get(url, headers=headers, timeout=4.0, follow_redirects=True)
                 if response.status_code == 200:
                     content_type = response.headers.get("content-type", "")
                     if content_type.startswith("image/"):
