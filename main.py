@@ -130,6 +130,9 @@ async def root():
     """
 
 
+# Create a global semaphore to process only 1 background task at a time
+INGEST_SEMAPHORE = asyncio.Semaphore(1)
+
 async def process_images_in_background(lesson_id: str, image_urls: list[str]):
     """
     Downloads and analyzes images, generates their vector embeddings, and stores
@@ -138,41 +141,42 @@ async def process_images_in_background(lesson_id: str, image_urls: list[str]):
     if not image_urls:
         return
 
-    print(f"Background task started: processing {len(image_urls)} images for lesson '{lesson_id}'...")
+    async with INGEST_SEMAPHORE:
+        print(f"Background task started: processing {len(image_urls)} images for lesson '{lesson_id}'...")
 
-    # 1. Fetch and describe images in the background (using vision or LLM SVG text analysis)
-    image_descriptions = await analyze_images_concurrently(image_urls)
-    if not image_descriptions:
-        print(f"Background task complete: No valid image descriptions generated for lesson '{lesson_id}'.")
-        return
+        # 1. Fetch and describe images in the background (using vision or LLM SVG text analysis)
+        image_descriptions = await analyze_images_concurrently(image_urls)
+        if not image_descriptions:
+            print(f"Background task complete: No valid image descriptions generated for lesson '{lesson_id}'.")
+            return
 
-    # 2. Generate embeddings in batch for descriptions
-    try:
-        embeddings = await get_embeddings_batch(image_descriptions)
-    except Exception as e:
-        print(f"Background task failed: Embedding generation for image descriptions failed for lesson '{lesson_id}': {e}")
-        return
-
-    # 3. Open dedicated session and persist to database
-    async with AsyncSessionLocal() as db:
-        new_chunks = []
-        for j, desc in enumerate(image_descriptions):
-            new_chunks.append(
-                LessonChunk(
-                    lesson_id=lesson_id,
-                    chunk_type="image_description",
-                    content=desc,
-                    embedding=embeddings[j]
-                )
-            )
-
+        # 2. Generate embeddings in batch for descriptions
         try:
-            db.add_all(new_chunks)
-            await db.commit()
-            print(f"Background task complete: successfully indexed {len(new_chunks)} image descriptions for lesson '{lesson_id}'.")
+            embeddings = await get_embeddings_batch(image_descriptions)
         except Exception as e:
-            await db.rollback()
-            print(f"Background task failed: failed to save image description chunks to database for lesson '{lesson_id}': {e}")
+            print(f"Background task failed: Embedding generation for image descriptions failed for lesson '{lesson_id}': {e}")
+            return
+
+        # 3. Open dedicated session and persist to database
+        async with AsyncSessionLocal() as db:
+            new_chunks = []
+            for j, desc in enumerate(image_descriptions):
+                new_chunks.append(
+                    LessonChunk(
+                        lesson_id=lesson_id,
+                        chunk_type="image_description",
+                        content=desc,
+                        embedding=embeddings[j]
+                    )
+                )
+
+            try:
+                db.add_all(new_chunks)
+                await db.commit()
+                print(f"Background task complete: successfully indexed {len(new_chunks)} image descriptions for lesson '{lesson_id}'.")
+            except Exception as e:
+                await db.rollback()
+                print(f"Background task failed: failed to save image description chunks to database for lesson '{lesson_id}': {e}")
 
 
 @app.post("/api/ingest", response_model=IngestResponse)
