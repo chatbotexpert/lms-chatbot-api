@@ -26,13 +26,5 @@ class SimpleChatPayload(BaseModel):
 class SimpleChatResponse(BaseModel):
     response: str
 
-class BatchIngestPayload(BaseModel):
-    records: List[IngestPayload] = Field(..., description="List of lesson payloads to ingest in batch")
 
-class BatchIngestResponse(BaseModel):
-    success: bool
-    message: str
-    processed_count: int
-    chunks_created: int
-    errors: List[str] = Field(default_factory=list, description="Errors encountered during batch processing")
 

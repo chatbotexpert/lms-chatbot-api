@@ -17,9 +17,7 @@ from schemas import (
     IngestPayload, 
     ChatPayload, 
     IngestResponse, 
-    SimpleChatPayload,
-    BatchIngestPayload,
-    BatchIngestResponse
+    SimpleChatPayload
 )
 from services import (
     get_embedding,
@@ -68,9 +66,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configurable delay between processing records during batch ingestion (to prevent rate limits)
-BATCH_INGEST_DELAY = float(os.getenv("BATCH_INGEST_DELAY", "2.0"))
 
 # ---------------------------------------------------------
 # Security Dependency
@@ -260,86 +255,108 @@ async def ingest(
         chunks_created=len(new_chunks)
     )
 
-@app.post("/api/ingest/batch", response_model=BatchIngestResponse)
-async def ingest_batch(
-    payload: BatchIngestPayload,
-    background_tasks: BackgroundTasks,
+
+@app.post("/api/ingest/sync", response_model=IngestResponse)
+async def ingest_sync(
+    payload: IngestPayload,
     db: AsyncSession = Depends(get_db),
     _=Depends(verify_api_key)
 ):
     """
-    Endpoint 3: Ingests multiple lessons in a single batch payload.
-    Processes text content synchronously and offloads images to background tasks.
+    Endpoint 1a: Ingests lesson content and processes image analysis synchronously (no background tasks).
     """
-    total_chunks_created = 0
-    processed_count = 0
-    errors = []
+    # 1. Idempotency: Delete previous entries matching the incoming lesson_id
+    try:
+        await db.execute(delete(LessonChunk).where(LessonChunk.lesson_id == payload.lesson_id))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database synchronization error: {str(e)}"
+        )
 
-    for idx, record in enumerate(payload.records):
+    # 2. Dynamic Chunking: Split text content (approx 1,000 chars, 200 overlap)
+    text_chunks = []
+    if payload.content and payload.content.strip():
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        text_chunks = splitter.split_text(payload.content)
+
+    if not text_chunks and not payload.image_urls:
+        return IngestResponse(
+            success=True,
+            message="No text content or image URLs found to index.",
+            chunks_created=0
+        )
+
+    # 3. Synchronously Vectorize and Prepare Text Chunks (if any)
+    new_chunks = []
+    if text_chunks:
         try:
-            # 1. Idempotency: Delete previous entries matching the incoming lesson_id
-            await db.execute(delete(LessonChunk).where(LessonChunk.lesson_id == record.lesson_id))
+            embeddings = await get_embeddings_batch(text_chunks)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Embedding generation for text failed: {str(e)}"
+            )
 
-            # 2. Dynamic Chunking: Split text content (approx 1,000 chars, 200 overlap)
-            text_chunks = []
-            if record.content and record.content.strip():
-                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-                text_chunks = splitter.split_text(record.content)
+        for i, chunk in enumerate(text_chunks):
+            new_chunks.append(
+                LessonChunk(
+                    lesson_id=payload.lesson_id,
+                    chunk_type="text",
+                    content=chunk,
+                    embedding=embeddings[i]
+                )
+            )
+        db.add_all(new_chunks)
 
-            if not text_chunks and not record.image_urls:
-                processed_count += 1
-                if idx < len(payload.records) - 1:
-                    await asyncio.sleep(BATCH_INGEST_DELAY)
-                continue
-
-            # 3. Synchronously Vectorize and Save Text Chunks (if any)
-            new_chunks = []
-            if text_chunks:
-                embeddings = await get_embeddings_batch(text_chunks)
-                for i, chunk in enumerate(text_chunks):
-                    new_chunks.append(
+    # 4. Synchronously Process and Vectorize Images (if any)
+    image_chunks_count = 0
+    if payload.image_urls:
+        try:
+            image_descriptions = await analyze_images_concurrently(payload.image_urls)
+            if image_descriptions:
+                img_embeddings = await get_embeddings_batch(image_descriptions)
+                img_chunks = []
+                for j, desc in enumerate(image_descriptions):
+                    img_chunks.append(
                         LessonChunk(
-                            lesson_id=record.lesson_id,
-                            chunk_type="text",
-                            content=chunk,
-                            embedding=embeddings[i]
+                            lesson_id=payload.lesson_id,
+                            chunk_type="image_description",
+                            content=desc,
+                            embedding=img_embeddings[j]
                         )
                     )
-                db.add_all(new_chunks)
-                await db.commit()
-                total_chunks_created += len(new_chunks)
-
-            # 4. Offload Image Ingestion to Background Tasks
-            if record.image_urls:
-                background_tasks.add_task(
-                    process_images_in_background,
-                    record.lesson_id,
-                    record.image_urls
-                )
-
-            processed_count += 1
-            
+                db.add_all(img_chunks)
+                image_chunks_count = len(img_chunks)
         except Exception as e:
             await db.rollback()
-            err_msg = f"Failed for post {record.lesson_id}: {str(e)}"
-            errors.append(err_msg)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Image processing or embedding generation failed: {str(e)}"
+            )
 
-        # Sleep between records to prevent hitting OpenAI rate limits for embeddings
-        if idx < len(payload.records) - 1:
-            await asyncio.sleep(BATCH_INGEST_DELAY)
+    # Commit all chunks (text + images) at the end
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to persist lesson chunks to database: {str(e)}"
+        )
 
-    success = len(errors) == 0
-    message = f"Batch processed. Successfully ingested text for {processed_count} out of {len(payload.records)} records."
-    if errors:
-        message += f" Encountered {len(errors)} errors."
+    msg = f"Successfully ingested lesson '{payload.lesson_id}' with {len(text_chunks)} text chunks"
+    if image_chunks_count > 0:
+        msg += f" and {image_chunks_count} image descriptions synchronously."
+    else:
+        msg += "."
 
-    return BatchIngestResponse(
-        success=success,
-        message=message,
-        processed_count=processed_count,
-        chunks_created=total_chunks_created,
-        errors=errors
+    return IngestResponse(
+        success=True,
+        message=msg,
+        chunks_created=len(new_chunks) + image_chunks_count
     )
+
 
 @app.post("/api/test")
 async def ingest_test(payload: IngestPayload):
