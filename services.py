@@ -1,7 +1,10 @@
 import os
 import asyncio
 import json
+import base64
+import mimetypes
 from typing import List, Optional, AsyncGenerator
+import httpx
 from openai import AsyncOpenAI
 from schemas import ChatHistoryItem
 
@@ -32,6 +35,142 @@ async def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
     )
     return [item.embedding for item in response.data]
 
+async def get_svg_content(url: str) -> Optional[str]:
+    """
+    Retrieves the raw SVG XML string from a URL (either standard HTTP/HTTPS or base64 data URI).
+    Attempts to download up to 2 times with a 2-second delay on failure.
+    """
+    if url.startswith("data:"):
+        try:
+            # Format: data:image/svg+xml;base64,... or data:image/svg+xml,...
+            header, encoded = url.split(",", 1)
+            if "base64" in header:
+                return base64.b64decode(encoded).decode("utf-8", errors="ignore")
+            else:
+                from urllib.parse import unquote
+                return unquote(encoded)
+        except Exception as e:
+            print(f"Error decoding SVG data URL: {e}")
+            return None
+
+    max_attempts = 2
+    for attempt in range(max_attempts):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=10.0)
+                if response.status_code == 200:
+                    return response.text
+                else:
+                    print(f"Attempt {attempt+1}/{max_attempts} failed to fetch SVG. Status: {response.status_code}")
+        except Exception as e:
+            print(f"Attempt {attempt+1}/{max_attempts} failed to fetch SVG URL {url}: {e}")
+        
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(2.0)
+
+    return None
+
+async def get_image_base64(url: str) -> Optional[tuple[str, str]]:
+    """
+    Downloads the image from URL and returns a tuple (base64_string, mime_type).
+    Attempts to download up to 2 times with a 2-second delay on failure.
+    """
+    if url.startswith("data:"):
+        try:
+            header, encoded = url.split(",", 1)
+            mime_type = header.split(";")[0].split(":")[1]
+            return encoded, mime_type
+        except Exception as e:
+            print(f"Error parsing data URI: {e}")
+            return None
+
+    max_attempts = 2
+    for attempt in range(max_attempts):
+        try:
+            mime_type, _ = mimetypes.guess_type(url.split("?")[0])
+            if not mime_type:
+                ext = url.split("?")[0].split(".")[-1].lower()
+                if ext in ("jpg", "jpeg"):
+                    mime_type = "image/jpeg"
+                elif ext == "png":
+                    mime_type = "image/png"
+                elif ext == "webp":
+                    mime_type = "image/webp"
+                elif ext == "gif":
+                    mime_type = "image/gif"
+                else:
+                    mime_type = "image/jpeg"
+
+            async with httpx.AsyncClient() as client:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                response = await client.get(url, headers=headers, timeout=15.0, follow_redirects=True)
+                if response.status_code == 200:
+                    content_type = response.headers.get("content-type", "")
+                    if content_type.startswith("image/"):
+                        mime_type = content_type
+                    encoded = base64.b64encode(response.content).decode("utf-8")
+                    return encoded, mime_type
+                else:
+                    print(f"Attempt {attempt+1}/{max_attempts} failed to fetch image {url}. Status: {response.status_code}")
+        except Exception as e:
+            print(f"Attempt {attempt+1}/{max_attempts} failed to download image {url}: {e}")
+        
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(2.0)
+
+    return None
+
+async def analyze_svg_with_llm(
+    svg_content: str,
+    index: int,
+    semaphore: asyncio.Semaphore,
+    initial_delay: float = 0.0
+) -> Optional[str]:
+    """
+    Analyzes the SVG source code using gpt-4o-mini chat completion.
+    Converts vector properties/text tags to English descriptions.
+    """
+    if initial_delay > 0:
+        await asyncio.sleep(initial_delay)
+
+    async with semaphore:
+        max_retries = 15
+        backoff_base = 3.0
+        for attempt in range(max_retries):
+            try:
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": (
+                                "You are an expert Spanish instructor. Below is the XML/SVG source code of an image from a Spanish lesson summary. "
+                                "Describe everything happening in this vector image in English, detailing any Spanish vocabulary, grammar points, "
+                                "visual diagrams, text, or situational context represented in the SVG tags, text elements, or paths so it can be used for text-based semantic retrieval.\n\n"
+                                f"SVG Code:\n{svg_content[:40000]}"
+                            )
+                        }
+                    ],
+                    max_tokens=500,
+                    temperature=0.0
+                )
+                description = response.choices[0].message.content
+                return f"Image #{index} description: {description}"
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "rate_limit" in err_str or "429" in err_str or "rate limit" in err_str
+                
+                if is_rate_limit and attempt < max_retries - 1:
+                    import random
+                    sleep_time = backoff_base * (2 ** attempt) + random.uniform(0.5, 2.5)
+                    print(f"Rate limit (429) hit for SVG image #{index}. Retrying in {sleep_time:.2f}s (Attempt {attempt+1}/{max_retries})...")
+                    await asyncio.sleep(sleep_time)
+                else:
+                    print(f"Error describing SVG image #{index}: {e}")
+                    return None
+
 async def analyze_image_with_vision(
     image_url: str,
     index: int,
@@ -41,7 +180,29 @@ async def analyze_image_with_vision(
     """
     Calls the OpenAI Vision API (gpt-4o-mini) to describe the image content for retrieval.
     Concurrency is bounded by the provided semaphore, with exponential backoff retries for rate limits.
+    Downloads the image locally and encodes it in base64 to avoid OpenAI timeouts.
     """
+    # Check if the image is an SVG
+    is_svg = False
+    if "image/svg+xml" in image_url.lower() or image_url.lower().split("?")[0].endswith(".svg"):
+        is_svg = True
+
+    if is_svg:
+        svg_content = await get_svg_content(image_url)
+        if svg_content:
+            return await analyze_svg_with_llm(svg_content, index, semaphore, initial_delay)
+        else:
+            print(f"Skipping SVG image #{index} because its content could not be retrieved.")
+            return None
+
+    # For standard images, first fetch and base64-encode
+    image_data = await get_image_base64(image_url)
+    if not image_data:
+        print(f"Skipping image #{index} because it could not be downloaded/encoded.")
+        return None
+
+    base64_str, mime_type = image_data
+
     if initial_delay > 0:
         await asyncio.sleep(initial_delay)
 
@@ -67,7 +228,7 @@ async def analyze_image_with_vision(
                                 {
                                     "type": "image_url",
                                     "image_url": {
-                                        "url": image_url
+                                        "url": f"data:{mime_type};base64,{base64_str}"
                                     }
                                 }
                             ]

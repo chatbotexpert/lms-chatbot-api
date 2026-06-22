@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.engine.url import URL
 
-# Load .env file. override=False means system/Docker env vars always win.
-load_dotenv(override=False)
+# Load .env file. override=True makes sure local .env settings take priority over stale system env vars.
+load_dotenv(override=True)
 
 # ── Build connection URL from individual parts ────────────────────────────────
 # This avoids ALL URL-parsing issues caused by special characters (e.g. @)
