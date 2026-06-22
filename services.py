@@ -8,6 +8,14 @@ import httpx
 from openai import AsyncOpenAI
 from schemas import ChatHistoryItem
 
+try:
+    from PIL import Image
+    import pillow_avif
+    HAS_AVIF_SUPPORT = True
+except ImportError:
+    HAS_AVIF_SUPPORT = False
+
+
 # Initialize AsyncOpenAI client
 # It will read OPENAI_API_KEY from environment variables by default.
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
@@ -70,15 +78,49 @@ async def get_svg_content(url: str) -> Optional[str]:
 
     return None
 
+def convert_avif_to_jpeg_or_png(avif_bytes: bytes) -> tuple[str, str]:
+    """
+    Converts AVIF image bytes to JPEG or PNG (if transparent) base64-encoded string and returns (base64_str, mime_type).
+    """
+    if not HAS_AVIF_SUPPORT:
+        raise ImportError("AVIF support is not installed (Pillow and pillow-avif-plugin required).")
+    from PIL import Image
+    import io
+    img = Image.open(io.BytesIO(avif_bytes))
+    has_alpha = False
+    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+        has_alpha = True
+    
+    out_buf = io.BytesIO()
+    if has_alpha:
+        img.save(out_buf, format="PNG")
+        mime_type = "image/png"
+    else:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(out_buf, format="JPEG", quality=90)
+        mime_type = "image/jpeg"
+    
+    encoded = base64.b64encode(out_buf.getvalue()).decode("utf-8")
+    return encoded, mime_type
+
 async def get_image_base64(url: str) -> Optional[tuple[str, str]]:
     """
     Downloads the image from URL and returns a tuple (base64_string, mime_type).
     Attempts to download up to 2 times with a 2-second delay on failure.
+    If the image is AVIF, converts it to standard JPEG or PNG in-memory.
     """
     if url.startswith("data:"):
         try:
             header, encoded = url.split(",", 1)
             mime_type = header.split(";")[0].split(":")[1]
+            if mime_type == "image/avif":
+                if HAS_AVIF_SUPPORT:
+                    avif_bytes = base64.b64decode(encoded)
+                    return convert_avif_to_jpeg_or_png(avif_bytes)
+                else:
+                    print("Skipping AVIF conversion for data URI because AVIF support is not installed.")
+                    return None
             return encoded, mime_type
         except Exception as e:
             print(f"Error parsing data URI: {e}")
@@ -88,8 +130,12 @@ async def get_image_base64(url: str) -> Optional[tuple[str, str]]:
     for attempt in range(max_attempts):
         try:
             mime_type, _ = mimetypes.guess_type(url.split("?")[0])
-            if not mime_type:
-                ext = url.split("?")[0].split(".")[-1].lower()
+            ext = url.split("?")[0].split(".")[-1].lower()
+            
+            # Explicit override for AVIF based on extension
+            if ext == "avif" or mime_type == "image/avif":
+                mime_type = "image/avif"
+            elif not mime_type:
                 if ext in ("jpg", "jpeg"):
                     mime_type = "image/jpeg"
                 elif ext == "png":
@@ -107,7 +153,20 @@ async def get_image_base64(url: str) -> Optional[tuple[str, str]]:
                 }
                 response = await client.get(url, headers=headers, timeout=4.0, follow_redirects=True)
                 if response.status_code == 200:
-                    content_type = response.headers.get("content-type", "")
+                    content_type = response.headers.get("content-type", "").lower()
+                    
+                    # Intercept AVIF images
+                    if content_type == "image/avif" or mime_type == "image/avif":
+                        if HAS_AVIF_SUPPORT:
+                            try:
+                                return convert_avif_to_jpeg_or_png(response.content)
+                            except Exception as conversion_error:
+                                print(f"AVIF conversion failed for {url}: {conversion_error}")
+                                return None
+                        else:
+                            print(f"Skipping image {url} because it is AVIF and AVIF support is not installed.")
+                            return None
+                    
                     if content_type.startswith("image/"):
                         mime_type = content_type
                     encoded = base64.b64encode(response.content).decode("utf-8")
