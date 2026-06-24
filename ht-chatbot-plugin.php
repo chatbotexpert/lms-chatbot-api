@@ -68,7 +68,7 @@ function ht_sync_lesson_to_fastapi($post_id, $post, $update) {
         'image_urls'    => $image_urls
     );
 
-    $api_url = 'https://db.hashturn.net/api/ingest';
+    $api_url = 'https://lms-chatbot-api.vercel.app/api/ingest';
     $api_key = 'test_key_123';
 
     $response = wp_remote_post($api_url, array(
@@ -462,7 +462,7 @@ function ht_inject_chatbot_js() {
             let accumulatedResponse = '';
 
             try {
-                const response = await fetch('https://db.hashturn.net/api/chat', {
+                const response = await fetch('https://lms-chatbot-api.vercel.app/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
