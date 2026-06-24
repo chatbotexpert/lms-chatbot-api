@@ -2,25 +2,6 @@ version: "3.9"
 
 services:
 
-  # ── PostgreSQL + pgvector ──────────────────────────────────────────────────
-  lms-postgres:
-    image: pgvector/pgvector:pg16
-    container_name: lms-postgres
-    restart: always
-    environment:
-      POSTGRES_USER: lms_user
-      POSTGRES_PASSWORD: HashTurn@0900
-      POSTGRES_DB: lms_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    # Expose DB securely to local loopback (port 5434) so we can SSH tunnel into it
-    ports:
-      - "127.0.0.1:5434:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # ── FastAPI App ────────────────────────────────────────────────────────────
   # Port 8000 exposed to host so system Nginx can proxy to it
@@ -34,18 +15,4 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      DB_HOST: lms-postgres
-      DB_PORT: "5432"
-      DB_USER: lms_user
-      DB_PASSWORD: "HashTurn@0900"
-      DB_NAME: lms_db
-      DB_SSL: "false"
-    depends_on:
-      lms-postgres:
-        condition: service_healthy
 
-volumes:
-  postgres_data:
-    name: lms-postgres-data
-    external: false
